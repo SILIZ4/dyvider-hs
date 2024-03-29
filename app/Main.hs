@@ -28,19 +28,22 @@ parser = DyviderArgs
          <> value "modularity"
          <> metavar "{\"modularity\"}" )
 
+
+runProgram :: DyviderArgs -> IO ()
+runProgram args = do
+    let orient = if directed args then Directed else Undirected
+    (mapping, multigraph) <- sortMergeVertices <$> readGraphFile orient (filePath args)
+
+    let n' = maximum mapping
+        (EmbeddedMultigraph _ _ multiedges) = multigraph
+        m' = sum $ map snd $ Data.HashMap.Strict.toList multiedges
+        degrees = fromIntegral <$> getDegrees multigraph n'
+        getMod = modularity multigraph degrees m'
+        in print $ detectCommunities n' getMod
+
 main :: IO ()
 main = runProgram =<< execParser opts
   where
     opts = info (parser <**> helper)
       ( fullDesc
      <> progDesc "Exact linear community detection on embedded graphs.")
-
-runProgram :: DyviderArgs -> IO ()
-runProgram args = do
-    (mapping, multigraph) <- sortMergeVertices <$> readGraphFile (filePath args)
-    let n' = maximum mapping
-        (EmbeddedMultigraph _ multiedges) = multigraph
-        m' = sum $ map snd $ Data.HashMap.Strict.toList multiedges
-        degrees = fromIntegral <$> getDegrees multigraph n'
-        getMod = modularity multigraph degrees m'
-        in print $ detectCommunities n' getMod

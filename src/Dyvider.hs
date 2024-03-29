@@ -14,29 +14,31 @@ import qualified Data.Hashable
 import qualified Data.HashSet
 
 
-newtype Symmetric = Symmetric { pair :: (Int, Int) } deriving (Ord, Eq, Show)
-instance Data.Hashable.Hashable Symmetric where
-    hashWithSalt x (Symmetric y) = Data.Hashable.hashWithSalt x y
-    hash (Symmetric y) = Data.Hashable.hash y
+data Orientation = Undirected | Directed deriving (Ord, Eq, Show)
 
-type SimpleAdjacencyMatrix = HashSet Symmetric
-data EmbeddedGraph = EmbeddedGraph !(Array Int Double) !SimpleAdjacencyMatrix
+newtype Edge = Edge (Int, Int) deriving (Ord, Eq, Show)
+instance Data.Hashable.Hashable Edge where
+    hashWithSalt x (Edge y) = Data.Hashable.hashWithSalt x y
+    hash (Edge y) = Data.Hashable.hash y
 
-type AdjacencyMatrix = HashMap Symmetric Int
-data EmbeddedMultigraph = EmbeddedMultigraph !(Array Int Double) !AdjacencyMatrix
+type SimpleAdjacencyMatrix = HashSet Edge
+data EmbeddedGraph = EmbeddedGraph !Orientation !(Array Int Double) !SimpleAdjacencyMatrix
 
-multiplicity :: Symmetric -> AdjacencyMatrix -> Int
+type AdjacencyMatrix = HashMap Edge Int
+data EmbeddedMultigraph = EmbeddedMultigraph !Orientation !(Array Int Double) !AdjacencyMatrix
+
+multiplicity :: Edge -> AdjacencyMatrix -> Int
 multiplicity e es = fromMaybe 0 $ Data.HashMap.Strict.lookup e es
 
-sym :: Int -> Int -> Symmetric
-sym x y
-    | x <= y = Symmetric (y,x)
-    | otherwise = Symmetric (x,y)
+createEdge :: Orientation -> Int -> Int -> Edge
+createEdge Undirected x y | x <= y = Edge (y, x)
+                       | otherwise = Edge (x, y)
+createEdge Directed x y = Edge (x, y)
 
 
 sortMergeVertices :: EmbeddedGraph -> (Array Int Int, EmbeddedMultigraph)
-sortMergeVertices (EmbeddedGraph scores edges) =
-    (mapping, EmbeddedMultigraph scores' multiedges)
+sortMergeVertices (EmbeddedGraph orient scores edges) =
+    (mapping, EmbeddedMultigraph orient scores' multiedges)
     where scoreMap = Data.Map.fromList $ zip (toList scores) [1..]
           n' = Data.Map.size scoreMap
           scores' = Data.Array.listArray (1, n') . map fst $ Data.Map.toList scoreMap
@@ -45,22 +47,22 @@ sortMergeVertices (EmbeddedGraph scores edges) =
                         Just x -> x
           mapping = fmap getIndex scores'
           multiedges = let
-              newEdge (Symmetric (x, y)) = sym (mapping ! x) (mapping ! y)
+              newEdge (Edge (x, y)) = createEdge orient (mapping ! x) (mapping ! y)
               incrementEdge es e = Data.HashMap.Strict.insert (newEdge e) (multiplicity e es + 1) es
               in foldl' incrementEdge Data.HashMap.Strict.empty $ Data.HashSet.toList edges
 
 type Layer = (Int, Int)
 
 getDegrees :: EmbeddedMultigraph -> Int -> Array Int Int
-getDegrees (EmbeddedMultigraph _ multiedges) n' =
+getDegrees (EmbeddedMultigraph orient _ multiedges) n' =
     Data.Array.listArray (1, n') $ map (sum . neighbourMultiplicities) [1..n']
-    where adjustLoop i j = if i==j then (*2) else id
-          neighbourMultiplicities i = [adjustLoop i j (multiplicity (sym i j) multiedges) | j <- [1..n']]
+    where adjustLoop i j = if orient == Directed || i/=j then id else (*2)
+          neighbourMultiplicities i = [adjustLoop i j (multiplicity (createEdge orient i j) multiedges) | j <- [1..n']]
 
 modularity :: EmbeddedMultigraph -> Array Int Double -> Int -> Layer -> Double
-modularity (EmbeddedMultigraph _ multiedges) degrees edgeNumber (lo, hi) =
+modularity (EmbeddedMultigraph orient _ multiedges) degrees edgeNumber (lo, hi) =
     mr/m - (ds/(2*m))^(2::Integer)
-    where mr = fromIntegral $ sum [multiplicity (Symmetric (j, i)) multiedges
+    where mr = fromIntegral $ sum [multiplicity (createEdge orient i j) multiedges
                                     | i <- [lo..hi], j <- [lo..hi], i<=j]
           ds = (sum . map (degrees !)) [lo..hi]
           m = fromIntegral edgeNumber
