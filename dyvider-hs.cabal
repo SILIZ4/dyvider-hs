@@ -22,7 +22,7 @@ common warnings
 
 library
     import:           warnings
-    exposed-modules:  Dyvider
+    exposed-modules:  Dyvider, Metrics
     build-depends:    base ^>=4.17.2.1,
                       unordered-containers,
                       array,

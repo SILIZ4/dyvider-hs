@@ -15,7 +15,6 @@ import qualified Data.HashSet
 
 
 type Layer = (Int, Int)
-
 data Orientation = Undirected | Directed deriving (Ord, Eq, Show)
 
 newtype Edge = Edge (Int, Int) deriving (Ord, Eq, Show)
@@ -55,19 +54,6 @@ sortMergeVertices (EmbeddedGraph orient scores edges) =
               incrementEdge es e = Data.HashMap.Strict.insert (newEdge e) (multiplicity (newEdge e) es + 1) es
               in foldl' incrementEdge Data.HashMap.Strict.empty $ Data.HashSet.toList edges
 
-getDegrees :: EmbeddedMultigraph -> Int -> Array Int Int
-getDegrees (EmbeddedMultigraph orient _ multiedges) n' =
-    Data.Array.listArray (1, n') $ map (sum . neighbourMultiplicities) [1..n']
-    where adjustLoop i j = if orient == Directed || i/=j then id else (*2)
-          neighbourMultiplicities i = [adjustLoop i j (multiplicity (createEdge orient i j) multiedges) | j <- [1..n']]
-
-modularity :: EmbeddedMultigraph -> Array Int Double -> Int -> Layer -> Double
-modularity (EmbeddedMultigraph orient _ multiedges) degrees m (lo, hi) =
-    mr/m' - (ds/(2*m'))^(2::Integer)
-    where mr = fromIntegral $ sum [multiplicity (createEdge orient i j) multiedges
-                                    | i <- [lo..hi], j <- [lo..hi], i<=j]
-          ds = (sum . map (degrees !)) [lo..hi]
-          m' = fromIntegral m
 
 headOr :: a -> [a] -> a
 headOr x [] = x

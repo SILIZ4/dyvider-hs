@@ -4,6 +4,7 @@ import Options.Applicative
 import Data.Array (Array, (!))
 
 import Dyvider
+import Metrics
 import Parse (readGraphFile)
 
 
@@ -46,8 +47,11 @@ runProgram args = do
     let n' = maximum mapping
         (EmbeddedMultigraph _ _ multiedges) = multigraph
         degrees = fromIntegral <$> getDegrees multigraph n'
-        getMod = modularity multigraph degrees (edgeNumber multiedges)
-        (qstar, partition) = detectCommunities n' getMod
+        m' = fromIntegral $ edgeNumber multiedges
+        f = case quality args of
+                "modularity" -> modularity multigraph degrees m'
+                _ -> error "Unsupported quality metric."
+        (qstar, partition) = detectCommunities n' f
         in putStrLn $ "Q*=" ++ show qstar ++ "\n"
             ++ show [map (originalLabels zero mapping) [lo..hi]| (lo, hi) <- partition]
 
