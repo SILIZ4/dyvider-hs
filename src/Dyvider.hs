@@ -14,6 +14,8 @@ import qualified Data.Hashable
 import qualified Data.HashSet
 
 
+type Layer = (Int, Int)
+
 data Orientation = Undirected | Directed deriving (Ord, Eq, Show)
 
 newtype Edge = Edge (Int, Int) deriving (Ord, Eq, Show)
@@ -35,6 +37,8 @@ createEdge Undirected x y | x <= y = Edge (y, x)
                        | otherwise = Edge (x, y)
 createEdge Directed x y = Edge (x, y)
 
+edgeNumber :: AdjacencyMatrix -> Int
+edgeNumber = sum . map snd . Data.HashMap.Strict.toList
 
 sortMergeVertices :: EmbeddedGraph -> (Array Int Int, EmbeddedMultigraph)
 sortMergeVertices (EmbeddedGraph orient scores edges) =
@@ -48,10 +52,8 @@ sortMergeVertices (EmbeddedGraph orient scores edges) =
           mapping = fmap getIndex scores'
           multiedges = let
               newEdge (Edge (x, y)) = createEdge orient (mapping ! x) (mapping ! y)
-              incrementEdge es e = Data.HashMap.Strict.insert (newEdge e) (multiplicity e es + 1) es
+              incrementEdge es e = Data.HashMap.Strict.insert (newEdge e) (multiplicity (newEdge e) es + 1) es
               in foldl' incrementEdge Data.HashMap.Strict.empty $ Data.HashSet.toList edges
-
-type Layer = (Int, Int)
 
 getDegrees :: EmbeddedMultigraph -> Int -> Array Int Int
 getDegrees (EmbeddedMultigraph orient _ multiedges) n' =
@@ -60,12 +62,12 @@ getDegrees (EmbeddedMultigraph orient _ multiedges) n' =
           neighbourMultiplicities i = [adjustLoop i j (multiplicity (createEdge orient i j) multiedges) | j <- [1..n']]
 
 modularity :: EmbeddedMultigraph -> Array Int Double -> Int -> Layer -> Double
-modularity (EmbeddedMultigraph orient _ multiedges) degrees edgeNumber (lo, hi) =
-    mr/m - (ds/(2*m))^(2::Integer)
+modularity (EmbeddedMultigraph orient _ multiedges) degrees m (lo, hi) =
+    mr/m' - (ds/(2*m'))^(2::Integer)
     where mr = fromIntegral $ sum [multiplicity (createEdge orient i j) multiedges
                                     | i <- [lo..hi], j <- [lo..hi], i<=j]
           ds = (sum . map (degrees !)) [lo..hi]
-          m = fromIntegral edgeNumber
+          m' = fromIntegral m
 
 headOr :: a -> [a] -> a
 headOr x [] = x

@@ -19,17 +19,18 @@ maybeError :: String -> Maybe a -> a
 maybeError _ (Just x) = x
 maybeError msg Nothing = error msg
 
-parseEdgeList :: Orientation -> [String] -> SimpleAdjacencyMatrix
-parseEdgeList orient edgesStr =
+parseEdgeList :: Orientation -> Bool -> [String] -> SimpleAdjacencyMatrix
+parseEdgeList orient zero edgesStr =
     adjacency
     where edges = map (map (maybeError "Couldn't read vertex index in edge list.") . readCsvLine) edgesStr
           symEdges = let convert [y, y'] = createEdge orient y y'
                          convert _ = error "A line in the edge list doesn't have two values."
-                     in map convert edges
+                     in map (adjustVertices . convert) edges
+          adjustVertices = if zero then (\(Edge (x, y)) -> Edge (x+1, y+1)) else id
           adjacency = foldl' (flip Data.HashSet.insert) Data.HashSet.empty symEdges
 
-readGraphFile :: Orientation -> String -> IO EmbeddedGraph
-readGraphFile orient fileName = parseGraph . lines <$> readFile fileName
+readGraphFile :: Orientation -> Bool -> String -> IO EmbeddedGraph
+readGraphFile orient zero fileName = parseGraph . lines <$> readFile fileName
     where parseGraph xs =
             let (scoreLine, edgeLines) = case xs of
                             [_] -> error "File contains only the score line."
@@ -37,5 +38,5 @@ readGraphFile orient fileName = parseGraph . lines <$> readFile fileName
                             (y:ys) -> (y, ys)
                 scores = map (maybeError "Couldn't read score.") $ readCsvLine scoreLine
                 n = length scores
-                edges = parseEdgeList orient edgeLines
+                edges = parseEdgeList orient zero edgeLines
             in EmbeddedGraph orient (Data.Array.listArray (1, n) scores) edges

@@ -1,16 +1,17 @@
 module Main where
 
-import qualified Data.HashMap.Strict
 import Options.Applicative
+import Data.Array (Array, (!))
 
 import Dyvider
 import Parse (readGraphFile)
 
 
 data DyviderArgs = DyviderArgs
-  { filePath :: !FilePath
-  , directed :: !Bool
-  , quality  :: !String }
+  { filePath    :: !FilePath
+  , directed    :: !Bool
+  , zeroIndexed :: !Bool
+  , quality     :: !String }
 
 parser :: Parser DyviderArgs
 parser = DyviderArgs
@@ -21,6 +22,9 @@ parser = DyviderArgs
           ( long "directed"
          <> short 'd'
          <> help "Set if the graph is directed." )
+      <*> switch
+          ( long "zero"
+         <> help "Edgelist is zero-indexed." )
       <*> option auto
           ( long "quality"
          <> help "Quality metric used."
@@ -29,17 +33,23 @@ parser = DyviderArgs
          <> metavar "{\"modularity\"}" )
 
 
+originalLabels :: Bool -> Array Int Int -> Int -> Int
+originalLabels True mapping i = (mapping ! i) - 1
+originalLabels False mapping i = mapping ! i
+
 runProgram :: DyviderArgs -> IO ()
 runProgram args = do
     let orient = if directed args then Directed else Undirected
-    (mapping, multigraph) <- sortMergeVertices <$> readGraphFile orient (filePath args)
+    let zero = zeroIndexed args
+    (mapping, multigraph) <- sortMergeVertices <$> readGraphFile orient zero (filePath args)
 
     let n' = maximum mapping
         (EmbeddedMultigraph _ _ multiedges) = multigraph
-        m' = sum $ map snd $ Data.HashMap.Strict.toList multiedges
         degrees = fromIntegral <$> getDegrees multigraph n'
-        getMod = modularity multigraph degrees m'
-        in print $ detectCommunities n' getMod
+        getMod = modularity multigraph degrees (edgeNumber multiedges)
+        (qstar, partition) = detectCommunities n' getMod
+        in putStrLn $ "Q*=" ++ show qstar ++ "\n"
+            ++ show [map (originalLabels zero mapping) [lo..hi]| (lo, hi) <- partition]
 
 main :: IO ()
 main = runProgram =<< execParser opts
