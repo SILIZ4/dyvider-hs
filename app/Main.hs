@@ -1,48 +1,46 @@
 module Main where
 
-import System.Environment (getArgs)
-import Data.List (foldl')
-
-import qualified Data.HashSet
 import qualified Data.HashMap.Strict
-import qualified Data.Array
+import Options.Applicative
 
 import Dyvider
+import Parse (readGraphFile)
 
 
-splitWhen :: (a -> Bool) -> [a] -> [[a]]
-splitWhen cond = foldr (\x yss -> if cond x then []:yss else (x:head yss): tail yss) [[]]
+data DyviderArgs = DyviderArgs
+  { filePath :: !FilePath
+  , directed :: !Bool
+  , quality  :: !String }
 
-readCsvLine :: Read a => [Char] -> [a]
-readCsvLine = map (read . filter (/=' ')). filter (not . null) . splitWhen (==',')
-
-graphSize :: [[Int]] -> Int
-graphSize = maximum . map maximum
-
-parseEdgeList :: [String] -> (Int, SimpleAdjacencyMatrix)
-parseEdgeList edgesStr =
-    (n, adjacency)
-    where edges = map readCsvLine edgesStr
-          n = graphSize edges
-          symEdges = let convert [y, y'] = sym y y'
-                         convert _ = error "Line contains more than two values."
-                     in map convert edges
-          adjacency = foldl' (flip Data.HashSet.insert) Data.HashSet.empty symEdges
-
-readGraphFile :: String -> IO EmbeddedGraph
-readGraphFile fileName = parseGraph . lines <$> readFile fileName
-    where parseGraph xs =
-            let (n, graph) = parseEdgeList $ tail xs
-            in EmbeddedGraph (Data.Array.listArray (1, n) (readCsvLine (head xs))) graph
+parser :: Parser DyviderArgs
+parser = DyviderArgs
+      <$> argument str (
+         metavar "FILE"
+         <> help "Path to text file in csv-like format. The first line should contain the scores and the other lines should contain the edges.")
+      <*> switch
+          ( long "directed"
+         <> short 'd'
+         <> help "Set if the graph is directed." )
+      <*> option auto
+          ( long "quality"
+         <> help "Quality metric used."
+         <> showDefault
+         <> value "modularity"
+         <> metavar "{\"modularity\"}" )
 
 main :: IO ()
-main = do
-  args <- getArgs
-  (mapping, multigraph) <- sortMergeVertices <$> readGraphFile (head args)
-  let n' = maximum mapping
-      (EmbeddedMultigraph _ multiedges) = multigraph
-      m' = sum $ map snd $ Data.HashMap.Strict.toList multiedges
-      degrees = fromIntegral <$> getDegrees multigraph n'
-      getMod = modularity multigraph degrees m'
-      in print $ detectCommunities n' getMod
-      --in print $ map getMod [(1, 1), (2, 4)]
+main = runProgram =<< execParser opts
+  where
+    opts = info (parser <**> helper)
+      ( fullDesc
+     <> progDesc "Exact linear community detection on embedded graphs.")
+
+runProgram :: DyviderArgs -> IO ()
+runProgram args = do
+    (mapping, multigraph) <- sortMergeVertices <$> readGraphFile (filePath args)
+    let n' = maximum mapping
+        (EmbeddedMultigraph _ multiedges) = multigraph
+        m' = sum $ map snd $ Data.HashMap.Strict.toList multiedges
+        degrees = fromIntegral <$> getDegrees multigraph n'
+        getMod = modularity multigraph degrees m'
+        in print $ detectCommunities n' getMod
