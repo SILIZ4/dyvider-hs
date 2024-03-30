@@ -11,9 +11,10 @@ import Parse (readGraphFile)
 
 data DyviderArgs = DyviderArgs
   { filePath    :: !FilePath
+  , outputFile  :: !FilePath
   , quality     :: !String
   , directed    :: !Bool
-  , memoizeF     :: !Bool
+  , memoizeF    :: !Bool
   , zeroIndexed :: !Bool
   }
 
@@ -22,7 +23,13 @@ parser = DyviderArgs
       <$> argument str (
          metavar "FILE"
          <> help "Path to text file in csv-like format. The first line should contain the scores and the other lines should contain the edges.")
-      <*> option auto
+      <*> strOption
+          ( long "output"
+         <> short 'o'
+         <> help "Output result to given file path."
+         <> value ""
+         <> metavar "OUTPUT_FILE" )
+      <*> strOption
           ( long "quality"
          <> help "Quality metric used."
          <> showDefault
@@ -65,9 +72,12 @@ runProgram args = do
                         detectCommunitiesMem n' fmem Data.HashMap.Strict.empty
                     else
                         detectCommunities n' f
-
-        in putStrLn $ "Q*=" ++ show qstar ++ "\n"
-            ++ show [map (originalLabels zero mapping) [lo..hi]| (lo, hi) <- partition]
+        remappedPartition = [map (originalLabels zero mapping) [lo..hi]| (lo, hi) <- partition]
+        filename = outputFile args
+        in if filename == "" then
+            putStrLn $ "Q*=" ++ show qstar ++ "\n" ++ show remappedPartition
+        else
+            writeFile filename (show qstar ++ "\n" ++ show remappedPartition)
 
 main :: IO ()
 main = runProgram =<< execParser opts
