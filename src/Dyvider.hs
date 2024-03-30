@@ -59,11 +59,26 @@ headOr :: a -> [a] -> a
 headOr x [] = x
 headOr _ (x:_) = x
 
+retrievePartition :: [(Int, a)] -> Int -> [Layer]
+retrievePartition [] _ = []
+retrievePartition [_] _ = []
+retrievePartition ((k, _):xs) kprev = (k, kprev): retrievePartition (drop (kprev-k) xs) (k-1)
+
 detectCommunities :: (Num a, Ord a, Show a) => Int -> (Layer -> a) -> (a, [Layer])
-detectCommunities n' f = ((snd . head) bests, buildSolution bests n')
+detectCommunities n' f = ((snd . head) bests, retrievePartition bests n')
     where qStar j = maximumBy (\x y -> compare (snd x) (snd y)) . zipWith (\k q -> (k, q + f (k, j))) [j, j-1 .. 1]
           bests = foldl' (\qs j -> qStar j (map snd qs) : qs) [(1, 0)] [1 .. n']
-          buildSolution [] _ = []
-          buildSolution [_] _ = []
-          buildSolution ((k, _):xs) kprev =
-            (k, kprev): buildSolution (drop (kprev-k) xs) (k-1)
+
+detectCommunitiesMem :: (Num a, Ord a, Show a) => Int -> (Layer -> b -> (a, b)) -> b -> (a, [Layer])
+detectCommunitiesMem n' f initMem = ((snd . head) bests, retrievePartition bests n')
+    where qStar m j qs = let g (kmax, qmax, mem) (k, q) =
+                                if q' > qmax || kmax<0 then
+                                    (k, q', mem')
+                                else
+                                    (kmax, qmax, mem')
+                                where (fval, mem') = f (k,j) mem
+                                      q' = q + fval
+                         in foldl' g (-1, 0, m) $ zip [j, j-1 .. 1] qs
+          bests = fst $ foldl' (\(qs, mem) j -> let (k, q, mem') = qStar mem j (map snd qs)
+                                                in ((k, q):qs, mem'))
+                        ([(1, 0)], initMem) [1 .. n']

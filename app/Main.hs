@@ -2,6 +2,7 @@ module Main where
 
 import Options.Applicative
 import Data.Array (Array, (!))
+import qualified Data.HashMap.Strict
 
 import Dyvider
 import Metrics
@@ -10,28 +11,34 @@ import Parse (readGraphFile)
 
 data DyviderArgs = DyviderArgs
   { filePath    :: !FilePath
+  , quality     :: !String
   , directed    :: !Bool
+  , memoizeF     :: !Bool
   , zeroIndexed :: !Bool
-  , quality     :: !String }
+  }
 
 parser :: Parser DyviderArgs
 parser = DyviderArgs
       <$> argument str (
          metavar "FILE"
          <> help "Path to text file in csv-like format. The first line should contain the scores and the other lines should contain the edges.")
-      <*> switch
-          ( long "directed"
-         <> short 'd'
-         <> help "Set if the graph is directed." )
-      <*> switch
-          ( long "zero"
-         <> help "Edgelist is zero-indexed." )
       <*> option auto
           ( long "quality"
          <> help "Quality metric used."
          <> showDefault
          <> value "modularity"
          <> metavar "{\"modularity\"}" )
+      <*> switch
+          ( long "directed"
+         <> short 'd'
+         <> help "Set if the graph is directed." )
+      <*> switch
+          ( long "memoize"
+         <> short 'm'
+         <> help "Edgelist is zero-indexed." )
+      <*> switch
+          ( long "zero"
+         <> help "Edgelist is zero-indexed." )
 
 
 originalLabels :: Bool -> Array Int Int -> Int -> Int
@@ -51,7 +58,14 @@ runProgram args = do
         f = case quality args of
                 "modularity" -> modularity multigraph degrees m'
                 _ -> error "Unsupported quality metric."
-        (qstar, partition) = detectCommunities n' f
+        fmem = case quality args of
+                "modularity" -> memoizePairSum (memoize f) (pairModularity multigraph degrees m') n'
+                _ -> error "Unsupported memoized quality metric."
+        (qstar, partition) = if memoizeF args then
+                        detectCommunitiesMem n' fmem Data.HashMap.Strict.empty
+                    else
+                        detectCommunities n' f
+
         in putStrLn $ "Q*=" ++ show qstar ++ "\n"
             ++ show [map (originalLabels zero mapping) [lo..hi]| (lo, hi) <- partition]
 
