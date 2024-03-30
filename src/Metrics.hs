@@ -24,8 +24,8 @@ getDegrees (EmbeddedMultigraph Undirected _ multiedges) n' =
 getDegrees (EmbeddedMultigraph Directed _ multiedges) n' =
     InOutDegrees (degrees inMult) (degrees outMult)
     where degrees mult = Data.Array.listArray (1, n') $ map (sum . mult) [1..n']
-          outMult i = [multiplicity (createEdge Directed i j) multiedges | j <- [1..n']]
-          inMult i = [multiplicity (createEdge Directed j i) multiedges | j <- [1..n']]
+          outMult i = [multiplicity (Edge (i, j)) multiedges | j <- [1..n']]
+          inMult i = [multiplicity (Edge (j, i)) multiedges | j <- [1..n']]
 
 modularity :: EmbeddedMultigraph -> Degrees Double -> Double -> Layer -> Double
 modularity (EmbeddedMultigraph Undirected _ multiedges) (Degrees degrees) m (lo, hi) =
@@ -36,7 +36,7 @@ modularity (EmbeddedMultigraph Undirected _ multiedges) (Degrees degrees) m (lo,
 
 modularity (EmbeddedMultigraph Directed _ multiedges) (InOutDegrees indegrees outdegrees) m (lo, hi) =
     mr/m - degSum indegrees * degSum outdegrees/(m^(2::Integer))
-    where mr = fromIntegral $ sum [multiplicity (createEdge Directed i j) multiedges
+    where mr = fromIntegral $ sum [multiplicity (Edge (i, j)) multiedges
                                      | i <- [lo..hi], j <- [lo..hi]]
           degSum ds = (sum . map (ds !)) [lo..hi]
 
@@ -48,14 +48,12 @@ pairModularity (EmbeddedMultigraph Undirected _ multiedges) (Degrees degrees) m 
         norm = if u/=v then id else (/ (2::Double))
     in (a_uv - norm (degrees!u) * (degrees!v) / m)/(2*m)
 
-pairModularity (EmbeddedMultigraph Directed _ _) _ _ _ =
-    error "pairModularity for directed graph is not yet supported."
--- pairModularity (EmbeddedMultigraph Directed _ multiedges) (InOutDegrees indegrees outdegrees) m (u, v) =
---     let a i j = fromIntegral $ multiplicity (Edge (i, j)) multiedges
---     in if u == v then
---         (a u v - (outdegrees!u) * (indegrees!v) / (2*m))/(2*m)
---     else
---         (a u v + a v u - ((outdegrees!u) * (indegrees!v) + (outdegrees!v) * (indegrees!u)) / (2*m))/(2*m)
+pairModularity (EmbeddedMultigraph Directed _ multiedges) (InOutDegrees indegrees outdegrees) m (u, v) =
+    let a i j = fromIntegral $ multiplicity (Edge (i, j)) multiedges
+    in if u == v then
+        (a u v - (outdegrees!u) * (indegrees!v) / m)/m
+    else
+        (a u v + a v u - ((outdegrees!u) * (indegrees!v) + (outdegrees!v) * (indegrees!u)) / m)/m
 
 pairModularity _ _ _ _ = error "Incompatible degrees and graph types."
 
