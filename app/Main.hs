@@ -81,7 +81,6 @@ runProgram args = do
                     else
                         detectCommunities n' f
         filename = outputFile args
-        fmem' x = fst (fmem x Data.HashMap.Strict.empty)
         in if filename == "" then
             putStrLn $ "Q*=" ++ show qstar ++ "\n" ++ show (layerID mapping partition)
         else
