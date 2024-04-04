@@ -64,23 +64,24 @@ runProgram :: DyviderArgs -> IO ()
 runProgram args = do
     let orient = if directed args then Directed else Undirected
     let zero = zeroIndexed args
-    (mapping, multigraph) <- sortMergeVertices <$> readGraphFile orient zero (filePath args)
+    (mapping, graph) <- sortMergeVertices <$> readGraphFile orient zero (filePath args)
 
     let n' = length mapping
-        (EmbeddedMultigraph _ _ multiedges) = multigraph
-        degrees = fromIntegral <$> getDegrees multigraph n'
+        (EmbeddedGraph _ _ multiedges) = graph
+        degrees = fromIntegral <$> getDegrees graph n'
         m' = fromIntegral $ edgeNumber multiedges
         f = case quality args of
-                "modularity" -> modularity multigraph degrees m'
+                "modularity" -> modularity graph degrees m'
                 _ -> error "Unsupported quality metric."
         fmem = case quality args of
-                "modularity" -> memoizePairSum (memoize f) (pairModularity multigraph degrees m') n'
+                "modularity" -> memoizePairSum (memoize f) (pairModularity graph degrees m') n'
                 _ -> error "Unsupported memoized quality metric."
         (qstar, partition) = if memoizeF args then
                         detectCommunitiesMem n' fmem Data.HashMap.Strict.empty
                     else
                         detectCommunities n' f
         filename = outputFile args
+        fmem' x = fst (fmem x Data.HashMap.Strict.empty)
         in if filename == "" then
             putStrLn $ "Q*=" ++ show qstar ++ "\n" ++ show (layerID mapping partition)
         else

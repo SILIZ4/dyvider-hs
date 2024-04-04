@@ -2,7 +2,7 @@ module Parse where
 
 import Data.List (foldl')
 
-import qualified Data.HashSet
+import qualified Data.HashMap.Strict as Data.HashMap
 import qualified Data.Array
 
 import Dyvider
@@ -19,15 +19,15 @@ maybeError :: String -> Maybe a -> a
 maybeError _ (Just x) = x
 maybeError msg Nothing = error msg
 
-parseEdgeList :: Orientation -> Bool -> [String] -> SimpleAdjacencyMatrix
+parseEdgeList :: Orientation -> Bool -> [String] -> AdjacencyMatrix
 parseEdgeList orient zero edgesStr =
     adjacency
     where edges = map (map (maybeError "Couldn't read vertex index in edge list.") . readCsvLine) edgesStr
           symEdges = let convert [y, y'] = createEdge orient y y'
                          convert _ = error "A line in the edge list doesn't have two values."
                      in map (adjustVertices . convert) edges
-          adjustVertices = if zero then (\(Edge (x, y)) -> Edge (x+1, y+1)) else id
-          adjacency = foldl' (flip Data.HashSet.insert) Data.HashSet.empty symEdges
+          adjustVertices = if zero then (\(Edge (u, v)) -> Edge (u+1, v+1)) else id
+          adjacency = foldl' (\acc e -> Data.HashMap.insert e (multiplicity e acc + 1) acc) Data.HashMap.empty symEdges
 
 readGraphFile :: Orientation -> Bool -> String -> IO EmbeddedGraph
 readGraphFile orient zero fileName = parseGraph . lines <$> readFile fileName
