@@ -1,6 +1,6 @@
 # Dyvider-hs
 
-A command-line (and faster) Haskell implementation of [dyvider].
+A command-line (and faster) Haskell implementation of [dyvider]. This version supports multigraphs and loops.
 
 The algorithm is from the paper [\"Exact and rapid linear clustering of networks with dynamic programming\"](https://arxiv.org/abs/2301.10403).
 
