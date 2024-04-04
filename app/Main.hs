@@ -3,6 +3,8 @@ module Main where
 import Options.Applicative
 import Data.Array (Array, (!))
 import qualified Data.HashMap.Strict
+import Data.List (foldl')
+import Data.Maybe (fromJust)
 
 import Dyvider
 import Metrics
@@ -48,9 +50,15 @@ parser = DyviderArgs
          <> help "Edgelist is zero-indexed." )
 
 
-originalLabels :: Bool -> Array Int Int -> Int -> Int
-originalLabels True mapping i = (mapping ! i) - 1
-originalLabels False mapping i = mapping ! i
+layerID :: Array Int Int -> [Layer] -> [Int]
+layerID mapping layers =
+    [layerOf (mapping ! v) | v <- [1..n]]
+    where n = length mapping
+          layerOf x = fromJust $ foldl' (\acc (i, (ymin, ymax)) -> case acc of
+                                            Just y -> Just y
+                                            Nothing -> if x>=ymin && x<=ymax then Just i else Nothing)
+                                 Nothing $ zip [1..] layers
+
 
 runProgram :: DyviderArgs -> IO ()
 runProgram args = do
@@ -58,7 +66,7 @@ runProgram args = do
     let zero = zeroIndexed args
     (mapping, multigraph) <- sortMergeVertices <$> readGraphFile orient zero (filePath args)
 
-    let n' = maximum mapping
+    let n' = length mapping
         (EmbeddedMultigraph _ _ multiedges) = multigraph
         degrees = fromIntegral <$> getDegrees multigraph n'
         m' = fromIntegral $ edgeNumber multiedges
@@ -72,12 +80,11 @@ runProgram args = do
                         detectCommunitiesMem n' fmem Data.HashMap.Strict.empty
                     else
                         detectCommunities n' f
-        remappedPartition = [map (originalLabels zero mapping) [lo..hi]| (lo, hi) <- partition]
         filename = outputFile args
         in if filename == "" then
-            putStrLn $ "Q*=" ++ show qstar ++ "\n" ++ show remappedPartition
+            putStrLn $ "Q*=" ++ show qstar ++ "\n" ++ show (layerID mapping partition)
         else
-            writeFile filename (show qstar ++ "\n" ++ show remappedPartition)
+            writeFile filename $ show qstar ++ "\n" ++ show (layerID mapping partition)
 
 main :: IO ()
 main = runProgram =<< execParser opts

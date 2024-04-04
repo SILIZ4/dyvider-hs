@@ -2,14 +2,14 @@ module Dyvider where
 
 import Data.Maybe (fromMaybe)
 import Data.Foldable (toList, maximumBy)
-import Data.List (foldl')
+import Data.List (foldl', elemIndex)
 
 import qualified Data.Array
 import Data.Array (Array, (!))
-import qualified Data.HashMap.Strict
+import qualified Data.HashMap.Strict as Data.HashMap
 import Data.HashSet (HashSet)
 import Data.HashMap.Strict (HashMap)
-import qualified Data.Map
+import qualified Data.Set
 import qualified Data.Hashable
 import qualified Data.HashSet
 
@@ -29,7 +29,7 @@ type AdjacencyMatrix = HashMap Edge Int
 data EmbeddedMultigraph = EmbeddedMultigraph !Orientation !(Array Int Double) !AdjacencyMatrix
 
 multiplicity :: Edge -> AdjacencyMatrix -> Int
-multiplicity e es = fromMaybe 0 $ Data.HashMap.Strict.lookup e es
+multiplicity e es = fromMaybe 0 $ Data.HashMap.lookup e es
 
 createEdge :: Orientation -> Int -> Int -> Edge
 createEdge Undirected x y | x <= y = Edge (y, x)
@@ -37,22 +37,22 @@ createEdge Undirected x y | x <= y = Edge (y, x)
 createEdge Directed x y = Edge (x, y)
 
 edgeNumber :: AdjacencyMatrix -> Int
-edgeNumber = sum . map snd . Data.HashMap.Strict.toList
+edgeNumber = sum . map snd . Data.HashMap.toList
 
 sortMergeVertices :: EmbeddedGraph -> (Array Int Int, EmbeddedMultigraph)
 sortMergeVertices (EmbeddedGraph orient scores edges) =
     (mapping, EmbeddedMultigraph orient scores' multiedges)
-    where scoreMap = Data.Map.fromList $ zip (toList scores) [1..]
-          n' = Data.Map.size scoreMap
-          scores' = Data.Array.listArray (1, n') . map fst $ Data.Map.toList scoreMap
-          getIndex v = case Data.Map.lookup v scoreMap of
+    where sortedScores = Data.Set.toList . Data.Set.fromList $ toList scores
+          n' = length sortedScores
+          scores' = Data.Array.listArray (1, n') sortedScores
+          getIndex score = case elemIndex score sortedScores of
                         Nothing -> error "Score map was not created sucessfully."
-                        Just x -> x
-          mapping = fmap getIndex scores'
+                        Just x -> x+1
+          mapping = fmap getIndex scores
           multiedges = let
               newEdge (Edge (x, y)) = createEdge orient (mapping ! x) (mapping ! y)
-              incrementEdge es e = Data.HashMap.Strict.insert (newEdge e) (multiplicity (newEdge e) es + 1) es
-              in foldl' incrementEdge Data.HashMap.Strict.empty $ Data.HashSet.toList edges
+              incrementEdge es e = Data.HashMap.insert (newEdge e) (multiplicity (newEdge e) es + 1) es
+              in foldl' incrementEdge Data.HashMap.empty $ Data.HashSet.toList edges
 
 
 headOr :: a -> [a] -> a
