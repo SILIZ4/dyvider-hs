@@ -23,11 +23,12 @@ parseEdgeList :: Orientation -> Bool -> [String] -> AdjacencyMatrix
 parseEdgeList orient zero edgesStr =
     adjacency
     where edges = map (map (maybeError "Couldn't read vertex index in edge list.") . readCsvLine) edgesStr
-          symEdges = let convert [y, y'] = createEdge orient y y'
-                         convert _ = error "A line in the edge list doesn't have two values."
+          symEdges = let convert [y, y'] = (createEdge orient y y', 1)
+                         convert [y, y', mult] = (createEdge orient y y', mult)
+                         convert _ = error "Edges in the file must be formatted as \"u,v\" or \"u,v,multiplicity\"."
                      in map (adjustVertices . convert) edges
-          adjustVertices = if zero then (\(Edge (u, v)) -> Edge (u+1, v+1)) else id
-          adjacency = foldl' (\acc e -> Data.HashMap.insert e (multiplicity e acc + 1) acc) Data.HashMap.empty symEdges
+          adjustVertices = if zero then (\(Edge (u, v), mult) -> (Edge (u+1, v+1), mult)) else id
+          adjacency = foldl' (\acc (e, mult) -> Data.HashMap.insert e (multiplicity e acc + mult) acc) Data.HashMap.empty symEdges
 
 readGraphFile :: Orientation -> Bool -> String -> IO EmbeddedGraph
 readGraphFile orient zero fileName = parseGraph . lines <$> readFile fileName
